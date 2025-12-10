@@ -1,0 +1,156 @@
+#ifndef TM1638_H
+#define TM1638_H
+
+#include <Arduino.h>
+
+// --- PINS ---
+// Adjust assignments here to match your specific board
+#define PIN_STB1  PIN_PA4  
+#define PIN_DIO   PIN_PA5  
+#define PIN_CLK   PIN_PA6  
+
+#define DELAY_BIT delayMicroseconds(1)
+
+// --- KEY MAPPING ---
+// Maps physical switch bits to ASCII characters
+const uint32_t SHIFT_MASK = 0x00000040; // SW2 is Shift
+
+struct KeyMapping {
+    uint32_t rawSignature; 
+    char unshifted;        
+    char shifted;          
+};
+
+// [NOTE] These codes define your hardware layout.
+// KIMHal.h MUST match these rawSignature values to work!
+const KeyMapping KEY_MAP[] = {
+    { 0x00000004, '0', 'P' }, // SW1: 0 / PC
+    { 0x00000400, '2', 'G' }, // SW3: 2 / GO
+    { 0x00004000, '1', '+' }, // SW4: 1 / +
+    { 0x00040000, '3', 'S' }, // SW5: 3 / ST
+    { 0x00400000, '4', 'R' }, // SW6: 4 / RS
+    { 0x04000000, '5', '5' }, // SW7
+    { 0x40000000, '6', '6' }, // SW8
+    { 0x00000002, '7', '7' }, // SW9
+    { 0x00000020, '8', '8' }, // SW10
+    { 0x00000200, '9', '9' }, // SW11
+    { 0x00002000, 'A', 'A' }, // SW12
+    { 0x00020000, 'B', 'B' }, // SW13
+    { 0x00200000, 'C', 'C' }, // SW14
+    { 0x02000000, 'D', 'D' }, // SW15
+    { 0x20000000, 'E', 'E' }, // SW16
+    { 0x00000001, 'F', 'F' }, // SW17
+    { 0x00000010, 'a', 'a' }, // SW18: AD
+    { 0x00000100, 'd', 'd' }, // SW19: DA
+};
+
+const uint8_t MAP_SIZE = sizeof(KEY_MAP) / sizeof(KeyMapping);
+const uint8_t HEX_FONT[] = { 0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F,0x77,0x7C,0x39,0x5E,0x79,0x71 };
+
+class TM1638 {
+  private:
+    void sendByte(uint8_t data) {
+      for (int i = 0; i < 8; i++) {
+        digitalWriteFast(PIN_CLK, LOW);
+        DELAY_BIT;
+        digitalWriteFast(PIN_DIO, (data & 1)); 
+        data >>= 1;
+        digitalWriteFast(PIN_CLK, HIGH);
+        DELAY_BIT;
+      }
+    }
+
+  public:
+    void begin() {
+      pinModeFast(PIN_STB1, OUTPUT);
+      pinModeFast(PIN_CLK, OUTPUT);
+      pinModeFast(PIN_DIO, OUTPUT);
+      digitalWriteFast(PIN_STB1, HIGH);
+      digitalWriteFast(PIN_CLK, HIGH);
+      sendCommand(0x8F); // Activate
+      clear();
+    }
+
+    void sendCommand(uint8_t cmd) {
+      digitalWriteFast(PIN_STB1, LOW);
+      DELAY_BIT;
+      sendByte(cmd);
+      digitalWriteFast(PIN_STB1, HIGH);
+      DELAY_BIT;
+    }
+
+    void setupDisplay(bool on, uint8_t intensity) {
+      sendCommand(0x80 | (on ? 8 : 0) | (intensity & 7));
+    }
+
+    void writeDigit(uint8_t pos, uint8_t hexValue) {
+      if (pos > 7) return;
+      sendCommand(0x44); 
+      digitalWriteFast(PIN_STB1, LOW);
+      DELAY_BIT;
+      sendByte(0xC0 | (pos << 1)); 
+      sendByte(HEX_FONT[hexValue & 0x0F]);
+      digitalWriteFast(PIN_STB1, HIGH);
+    }
+    
+    void setLed(uint8_t ledIdx, uint8_t state) {
+      if (ledIdx > 7) return;
+      sendCommand(0x44); 
+      digitalWriteFast(PIN_STB1, LOW);
+      DELAY_BIT;
+      sendByte(0xC1 + (ledIdx << 1)); 
+      sendByte(state ? 1 : 0);
+      digitalWriteFast(PIN_STB1, HIGH);
+    }
+
+    void clear() {
+      sendCommand(0x40); 
+      digitalWriteFast(PIN_STB1, LOW);
+      DELAY_BIT;
+      sendByte(0xC0); 
+      for(int i=0; i<16; i++) sendByte(0x00); 
+      digitalWriteFast(PIN_STB1, HIGH);
+    }
+
+    // --- NEW: Returns raw 32-bit button state for KIMHal ---
+    uint32_t readButtons() {
+      uint32_t packedData = 0;
+      digitalWriteFast(PIN_STB1, LOW);
+      DELAY_BIT;
+      sendByte(0x42); // Read Keys command
+      pinModeFast(PIN_DIO, INPUT_PULLUP);
+      DELAY_BIT; 
+      
+      for (int i = 0; i < 4; i++) {
+        uint8_t byteVal = 0;
+        for (int b = 0; b < 8; b++) {
+          digitalWriteFast(PIN_CLK, LOW);
+          DELAY_BIT;
+          if (digitalReadFast(PIN_DIO)) byteVal |= (1 << b);
+          digitalWriteFast(PIN_CLK, HIGH);
+          DELAY_BIT;
+        }
+        packedData |= ((uint32_t)byteVal << (i * 8));
+      }
+      pinModeFast(PIN_DIO, OUTPUT);
+      digitalWriteFast(PIN_STB1, HIGH);
+      return packedData;
+    }
+
+    // Legacy support (optional, but good to keep)
+    char scanKeys() {
+      uint32_t packedData = readButtons(); // Reuse new function
+      if (packedData == 0) return 0; 
+
+      bool isShifted = (packedData & SHIFT_MASK);
+      uint32_t baseKey = packedData & ~SHIFT_MASK;
+
+      for(int i=0; i<MAP_SIZE; i++) {
+        if (KEY_MAP[i].rawSignature == baseKey) {
+            return isShifted ? KEY_MAP[i].shifted : KEY_MAP[i].unshifted;
+        }
+      }
+      return 0;
+    }
+};
+#endif
