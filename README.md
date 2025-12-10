@@ -13,6 +13,8 @@ This project implements a cycle-accurate(ish) MOS 6502 emulator on the AVR128DB2
 * **Resource Usage:**
     * **Flash:** 21,886 bytes (16%)
     * **SRAM:** 11,589 bytes (70%) - Primarily used by the 8KB allocated for 6502 RAM.
+ 
+Note: Best use is to extend the "TM1638 8 Bits Digital LED Tube Display Module 8 Button Keys Microcontroller Display Electronic Module for AVR Arduino ARM" from Amazon or wherever to 19 keys, which is what this is written for. The KIM-1 only uses 6 digits
 
 ### Pinout Configuration
 | AVR Pin | Function | Description |
@@ -112,5 +114,6 @@ HELLO WORLD
 Although Phase 1 is complete, future enhancements could include:
 - EEPROM Storage: Saving BASIC programs to the AVR's internal EEPROM to persist them after power loss.
 - Tape Input: Using the AVR's Analog Comparator to read actual KIM-1 cassette tapes.
+- Map the extra two digits of the TM1638 display to a memory location for program use.
 - Re-align to ESP8266 for speed increase.
 - Add 6809, 8086 and Z80 emulations
