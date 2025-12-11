@@ -1,8 +1,7 @@
-# KIM-1 Emulator on AVR128DB28
-**Phase 1 Completion Report**
+# KIM-1 Emulator
 
 ## 1. Executive Summary
-This project implements a cycle-accurate(ish) MOS 6502 emulator on the AVR128DB28 microcontroller. It replicates the functionality of the original MOS KIM-1 (1976), including the 6-digit LED display, 23-key hex keypad, TTY (Teletype) serial interface, and cassette tape output.
+This project implements a cycle-accurate(ish) MOS 6502 emulator on the AVR128DB28 microcontroller. It replicates the functionality of the original MOS KIM-1 (1976), including the 6-digit LED display, 23-key hex keypad, TTY (Teletype) serial interface, and cassette tape output. The project then moved on to porting this to an ESP8266 with the required 3.3V to 5V transceiver. The next phase is to create a 6809 Emulator (ANN-1) and an 8086 Emulator (PAM-1).
 
 **Key Achievement:** The system successfully runs Tom Pittman's Tiny BASIC (v2.1) directly from an emulated ROM, interacting via USB Serial just as the original hardware would have over a current loop interface.
 
